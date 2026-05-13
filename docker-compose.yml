@@ -1,45 +1,76 @@
 # Coolify-compatible Docker Compose for OpenChamber
-# Image is published to ghcr.io/nathanjgaul/openchamber-coolify via GitHub Actions.
+# Image: ghcr.io/nathanjgaul/openchamber-coolify (built by GitHub Actions)
+#
+# HOW TO DEPLOY IN COOLIFY
+# ────────────────────────
+# 1. Create a new resource → Docker Compose → paste this file.
+# 2. Coolify detects all ${VAR} references and shows them in the UI for editing.
+# 3. After loading, assign a domain to the "openchamber" service in Coolify's UI.
+#    (SERVICE_FQDN_OPENCHAMBER_3000 tells Coolify's proxy to route traffic to port 3000.)
+# 4. Set UI_PASSWORD if you want to password-protect the web interface.
+# 5. Choose your opencode integration method – see HOST OPENCODE section below.
+# 6. Deploy.
 #
 # HOST OPENCODE INTEGRATION
 # ─────────────────────────
-# Option A (recommended) – mount the host binary so the container runs it directly:
-#   Adjust the left side of the volume below to your actual opencode binary path.
-#   Common locations: /usr/local/bin/opencode  or  /home/<user>/.local/bin/opencode
+# Option A – mount the host binary (recommended):
+#   Uncomment the volume line under "Option A" below.
+#   Adjust the left side to the actual path of opencode on the Coolify host, e.g.:
+#     /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
+#     /home/myuser/.local/bin/opencode:/opt/host-opencode/opencode:ro
+#   The entrypoint auto-detects the mount and prefers it over the bundled opencode-ai.
 #
-# Option B – connect to an already-running opencode server on the host:
-#   Uncomment OPENCODE_HOST and OPENCODE_SKIP_START instead.
+# Option B – connect to a running opencode server on the host:
+#   Set OPENCODE_HOST=http://host.docker.internal:4096 and OPENCODE_SKIP_START=true.
+#   host.docker.internal is pre-configured via extra_hosts below.
+#
+# Fallback – neither option:
+#   The bundled opencode-ai npm package is used automatically.
 
 services:
   openchamber:
     image: ghcr.io/nathanjgaul/openchamber-coolify:latest
-    ports:
-      - "3000:3000"
+
+    environment:
+      # ── Coolify magic variable ───────────────────────────────────────────────
+      # Registers this service with Coolify's Traefik proxy on container port 3000.
+      # Assign a domain to this service in Coolify's UI after loading the compose file.
+      - SERVICE_FQDN_OPENCHAMBER_3000
+
+      # ── OpenChamber settings ─────────────────────────────────────────────────
+      # Bind to all interfaces inside Docker (required for proxy routing to work).
+      - OPENCHAMBER_HOST=0.0.0.0
+      # Protect the web UI with a password. Leave empty to disable authentication.
+      - UI_PASSWORD=${UI_PASSWORD:-}
+
+      # ── Host opencode – Option B ─────────────────────────────────────────────
+      # URL of an opencode server already running on the host.
+      # Example: http://host.docker.internal:4096
+      - OPENCODE_HOST=${OPENCODE_HOST:-}
+      # Set to "true" when using OPENCODE_HOST so OpenChamber does not start its own process.
+      - OPENCODE_SKIP_START=${OPENCODE_SKIP_START:-false}
+
     extra_hosts:
+      # Allows the container to reach the Docker host as "host.docker.internal"
+      # (required for Option B).
       - "host.docker.internal:host-gateway"
+
     volumes:
       # ── Persistent OpenChamber data ─────────────────────────────────────────
       - openchamber-config:/home/openchamber/.config/openchamber
       - openchamber-ssh:/home/openchamber/.ssh
       - openchamber-workspaces:/home/openchamber/workspaces
-      # ── OpenCode data (config, state, models cache) ─────────────────────────
+
+      # ── OpenCode data (config, API keys, conversation history, model cache) ──
       - opencode-config:/home/openchamber/.config/opencode
       - opencode-share:/home/openchamber/.local/share/opencode
       - opencode-state:/home/openchamber/.local/state/opencode
-      # ── Host opencode binary (Option A) ─────────────────────────────────────
-      # Mount the host's opencode binary into the container.
-      # The entrypoint will automatically prefer it over the bundled opencode-ai.
-      # Change the left side to match the binary's actual path on your host.
-      - /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
-    environment:
-      OPENCHAMBER_HOST: "0.0.0.0"
-      # Uncomment to require a password for the web UI:
-      # UI_PASSWORD: "your_secure_password_here"
-      #
-      # Option B: connect to an opencode server already running on the host
-      # (remove the Option A volume mount above when using this):
-      # OPENCODE_HOST: "http://host.docker.internal:4096"
-      # OPENCODE_SKIP_START: "true"
+
+      # ── Host opencode binary – Option A ─────────────────────────────────────
+      # Uncomment and adjust the left side to the opencode binary path on your host.
+      # The source file MUST already exist on the host before deploying.
+      # - /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
+
     restart: unless-stopped
 
 volumes:

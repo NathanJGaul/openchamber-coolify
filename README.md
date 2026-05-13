@@ -19,9 +19,13 @@ ghcr.io/nathanjgaul/openchamber-coolify:latest
 - [How it works](#how-it-works)
 - [Prerequisites](#prerequisites)
 - [Deploying with Coolify](#deploying-with-coolify)
-  - [Option A — mount the host opencode binary (recommended)](#option-a--mount-the-host-opencode-binary-recommended)
-  - [Option B — connect to a running opencode server](#option-b--connect-to-a-running-opencode-server)
+- [Domain assignment](#domain-assignment)
 - [Environment variables](#environment-variables)
+- [Host opencode integration](#host-opencode-integration)
+  - [Option A — mount the host binary (recommended)](#option-a--mount-the-host-binary-recommended)
+  - [Option B — connect to a running opencode server](#option-b--connect-to-a-running-opencode-server)
+  - [Fallback — bundled opencode-ai](#fallback--bundled-opencode-ai)
+- [Sharing host opencode config and history](#sharing-host-opencode-config-and-history)
 - [Persistent volumes](#persistent-volumes)
 - [Building the image locally](#building-the-image-locally)
 - [Pinning to a specific OpenChamber version](#pinning-to-a-specific-openchamber-version)
@@ -38,15 +42,15 @@ The multi-stage `Dockerfile`:
    the `OPENCHAMBER_VERSION` build-arg, default `main`).
 2. **Installs dependencies** with `bun install`.
 3. **Builds** the `packages/web` package (`bun run build:web`).
-4. **Assembles a lean runtime image** from `oven/bun:1` that contains only the
+4. **Assembles a lean runtime image** from `oven/bun:1` containing only the
    compiled web server, its `node_modules`, and the `opencode-ai` npm package
    as a bundled fallback.
 
-`entrypoint.sh` (our thin wrapper around the upstream
+`entrypoint.sh` (a thin wrapper around the upstream
 `scripts/docker-entrypoint.sh`) checks for a host-mounted opencode binary at
-`/opt/host-opencode/opencode`.  If it is executable it is prepended to `PATH`,
-so it silently wins over the bundled `opencode-ai`.  If the mount is absent the
-bundled copy is used with no other changes needed.
+`/opt/host-opencode/opencode`. If it is a regular executable file it is
+prepended to `PATH`, silently winning over the bundled `opencode-ai`. If the
+mount is absent the bundled copy is used automatically.
 
 ---
 
@@ -55,93 +59,179 @@ bundled copy is used with no other changes needed.
 | Requirement | Notes |
 |---|---|
 | [Coolify v4+](https://coolify.io) | Self-hosted or Coolify Cloud |
-| opencode installed on the Coolify host | `npm i -g opencode-ai` or direct binary |
-| Port `3000` reachable inside the Coolify network | Coolify's reverse-proxy handles TLS termination |
+| opencode installed on the Coolify host | Required only for Options A & B below |
 
 ---
 
 ## Deploying with Coolify
 
-### 1 — Create a new service in Coolify
+> Coolify's Docker Compose deployment treats `docker-compose.yml` as the
+> **single source of truth**. Settings that would normally live in the UI
+> (environment variables, volumes, domains) are all defined in the compose
+> file. See the
+> [Coolify Docker Compose docs](https://coolify.io/docs/knowledge-base/docker/compose)
+> for full details.
 
-1. Open your Coolify dashboard → **Projects** → select your project → **+ New
-   Resource**.
+1. In your Coolify dashboard, go to **Projects → your project → + New Resource**.
 2. Choose **Docker Compose**.
-3. Paste the contents of [`docker-compose.yml`](./docker-compose.yml) from this
-   repository (or point Coolify at this GitHub repo directly).
-4. Configure the environment variables described below.
-5. Click **Deploy**.
-
-Coolify will pull `ghcr.io/nathanjgaul/openchamber-coolify:latest`, start the
-container, and assign it a domain through its built-in reverse proxy.
+3. Select **Load from URL / Git** and point it at this repository, **or** paste
+   the contents of [`docker-compose.yml`](./docker-compose.yml) directly into
+   the editor.
+4. Coolify automatically scans the file and surfaces every `${VAR}` reference
+   as an editable field in the **Environment Variables** tab — no manual
+   configuration required.
+5. [Assign a domain](#domain-assignment) to the `openchamber` service.
+6. Choose your [opencode integration method](#host-opencode-integration).
+7. Click **Deploy**.
 
 ---
 
-### Option A — mount the host opencode binary (recommended)
+## Domain assignment
 
-This is the default configuration in `docker-compose.yml`.  The container
-mounts the host binary read-only and uses it directly, so it always runs the
-**same version** you have on the host and shares its downloaded model cache.
+The compose file includes the Coolify magic variable `SERVICE_FQDN_OPENCHAMBER_3000`:
 
-Find the binary's path on your Coolify host:
+```yaml
+environment:
+  - SERVICE_FQDN_OPENCHAMBER_3000
+```
+
+This tells Coolify:
+
+- **Register** the `openchamber` service with its built-in Traefik reverse proxy.
+- **Route** all incoming HTTP/HTTPS traffic to **container port 3000**.
+- **Provision** a TLS certificate automatically (if HTTPS is configured on your
+  Coolify server).
+
+After loading the compose file, open the **Domains** tab for the `openchamber`
+service in Coolify and enter your desired domain, e.g. `https://code.example.com`.
+Coolify handles the rest.
+
+> **Note:** The compose file does **not** use a `ports:` mapping. A direct host
+> port binding would bypass Coolify's proxy and expose the service outside of
+> TLS/auth control. Use the domain approach above for all production deployments.
+
+---
+
+## Environment variables
+
+All `${VAR:-default}` references in the compose file are automatically detected
+by Coolify and displayed as editable fields in the UI. Hardcoded values (like
+`OPENCHAMBER_HOST=0.0.0.0`) are passed directly to the container and do not
+appear in the UI.
+
+| Variable | Default | Coolify UI | Description |
+|---|---|---|---|
+| `UI_PASSWORD` | *(empty)* | ✅ editable | When non-empty, the web UI requires this password. Leave blank to disable authentication. |
+| `OPENCODE_HOST` | *(empty)* | ✅ editable | URL of an external opencode server (Option B). Example: `http://host.docker.internal:4096` |
+| `OPENCODE_SKIP_START` | `false` | ✅ editable | Set `true` when using `OPENCODE_HOST` so OpenChamber doesn't start its own opencode process. |
+| `OPENCHAMBER_HOST` | `0.0.0.0` | ❌ hardcoded | Bind address. Must be `0.0.0.0` inside Docker for the proxy to reach the container. |
+
+Additional variables supported by OpenChamber but not exposed in the default
+compose file (add them manually in Coolify's Environment Variables UI if needed):
+
+| Variable | Description |
+|---|---|
+| `OPENCHAMBER_TUNNEL_PROVIDER` | Set to `cloudflare` to enable tunnel support. |
+| `OPENCHAMBER_TUNNEL_MODE` | `quick`, `managed-remote`, or `managed-local`. |
+| `OPENCHAMBER_TUNNEL_HOSTNAME` | Required for `managed-remote` tunnel mode. |
+| `OPENCHAMBER_TUNNEL_TOKEN` | Cloudflare token for `managed-remote` tunnel mode. |
+| `OH_MY_OPENCODE` | Set `true` to install [oh-my-opencode](https://github.com/tluyben/oh-my-opencode). |
+
+---
+
+## Host opencode integration
+
+### Option A — mount the host binary (recommended)
+
+The container can run the exact opencode binary already on your Coolify host,
+sharing its downloaded model cache and configuration.
+
+**Step 1** — find the binary path on the host:
 
 ```bash
 which opencode
-# e.g. /usr/local/bin/opencode
-# or   /home/myuser/.local/bin/opencode
-# or   /root/.local/bin/opencode  (if you installed as root)
+# /usr/local/bin/opencode  — system-wide npm install
+# /home/myuser/.local/bin/opencode  — user-local install
+# /root/.local/bin/opencode  — root install
 ```
 
-Update the volume mount in `docker-compose.yml`:
+**Step 2** — uncomment and adjust the volume line in `docker-compose.yml`:
 
 ```yaml
 volumes:
-  - /usr/local/bin/opencode:/opt/host-opencode/opencode:ro   # ← adjust left side
+  # ...existing volumes...
+  - /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
 ```
 
-When the container starts, `entrypoint.sh` detects the mount and logs:
+> ⚠️ **The source path must already exist on the host before deploying.**
+> Docker will not create the binary for you — and if the path is missing it
+> creates an empty directory at that location, which the entrypoint guards
+> against (`[ -f ]` check).
+
+**Step 3** — deploy. When the container starts, `entrypoint.sh` detects the
+mount and logs:
 
 ```
 [entrypoint] using host-mounted opencode: /opt/host-opencode/opencode
 ```
-
-No other configuration is required.
 
 ---
 
 ### Option B — connect to a running opencode server
 
 If opencode is already running as a server on the host (e.g. managed by
-systemd), you can tell OpenChamber to connect to it over HTTP instead of
-launching its own process.
+systemd or another process), OpenChamber can connect to it over HTTP without
+needing the binary inside the container at all.
 
-1. Remove (or comment out) the host-binary volume mount.
-2. Set the following environment variables:
+In Coolify's **Environment Variables** UI (or in the compose file), set:
 
-```yaml
-environment:
-  OPENCODE_HOST: "http://host.docker.internal:4096"
-  OPENCODE_SKIP_START: "true"
-```
+| Variable | Value |
+|---|---|
+| `OPENCODE_HOST` | `http://host.docker.internal:4096` |
+| `OPENCODE_SKIP_START` | `true` |
 
 `host.docker.internal` resolves to the Docker host gateway and is already
-configured via `extra_hosts` in `docker-compose.yml`.
+configured via `extra_hosts` in the compose file.
+
+Leave the Option A volume line commented out.
 
 ---
 
-## Environment variables
+### Fallback — bundled opencode-ai
 
-| Variable | Default | Description |
-|---|---|---|
-| `OPENCHAMBER_HOST` | `0.0.0.0` | Bind address for the OpenChamber web server. The default is required for Docker port-mapping to work. |
-| `UI_PASSWORD` | *(unset)* | When set, the web UI requires this password before granting access. |
-| `OPENCODE_HOST` | *(unset)* | URL of an external opencode server. Use with Option B. |
-| `OPENCODE_SKIP_START` | *(unset)* | Set to `"true"` to prevent OpenChamber from starting its own opencode process. Use with `OPENCODE_HOST`. |
-| `OPENCHAMBER_TUNNEL_PROVIDER` | *(unset)* | Set to `cloudflare` to enable tunnel support. |
-| `OPENCHAMBER_TUNNEL_MODE` | *(unset)* | `quick`, `managed-remote`, or `managed-local`. |
-| `OPENCHAMBER_TUNNEL_HOSTNAME` | *(unset)* | Required for `managed-remote` tunnel mode. |
-| `OPENCHAMBER_TUNNEL_TOKEN` | *(unset)* | Cloudflare token for `managed-remote` tunnel mode. |
-| `OH_MY_OPENCODE` | *(unset)* | Set to `"true"` to install and enable [oh-my-opencode](https://github.com/tluyben/oh-my-opencode). |
+If neither option is configured, the `opencode-ai` npm package bundled in the
+image is used automatically. No additional configuration is needed. This is a
+good starting point if you want to try OpenChamber before installing opencode
+on the host.
+
+---
+
+## Sharing host opencode config and history
+
+When using Option A, you can additionally share the host user's opencode
+configuration and conversation history with the container by replacing the
+named volumes with host bind-mounts. In `docker-compose.yml`, swap:
+
+```yaml
+- opencode-config:/home/openchamber/.config/opencode
+- opencode-share:/home/openchamber/.local/share/opencode
+- opencode-state:/home/openchamber/.local/state/opencode
+```
+
+with:
+
+```yaml
+- /home/myuser/.config/opencode:/home/openchamber/.config/opencode
+- /home/myuser/.local/share/opencode:/home/openchamber/.local/share/opencode
+- /home/myuser/.local/state/opencode:/home/openchamber/.local/state/opencode
+```
+
+> **Note:** The container runs as UID/GID 1000. Ensure the host directories
+> are readable by UID 1000, or adjust ownership: `chown -R 1000:1000 ~/.config/opencode`.
+
+In Coolify's compose UI, Coolify treats bind-mount volumes the same as named
+volumes — it will display them in the **Storages** tab but will not manage the
+host path itself.
 
 ---
 
@@ -155,41 +245,34 @@ container restarts or image updates:
 | `openchamber-config` | `/home/openchamber/.config/openchamber` | OpenChamber application settings |
 | `openchamber-ssh` | `/home/openchamber/.ssh` | SSH keys (auto-generated on first start if absent) |
 | `openchamber-workspaces` | `/home/openchamber/workspaces` | Cloned repositories / working directories |
-| `opencode-config` | `/home/openchamber/.config/opencode` | opencode configuration (API keys, providers, etc.) |
+| `opencode-config` | `/home/openchamber/.config/opencode` | opencode config (API keys, providers, models) |
 | `opencode-share` | `/home/openchamber/.local/share/opencode` | Conversation history, model cache |
 | `opencode-state` | `/home/openchamber/.local/state/opencode` | opencode runtime state |
 
-> **Tip:** When using Option A, `opencode-config` / `opencode-share` /
-> `opencode-state` can be replaced with bind-mounts pointing directly at the
-> host user's opencode directories so the container and the host share a single
-> set of configuration and history:
->
-> ```yaml
-> volumes:
->   - /home/myuser/.config/opencode:/home/openchamber/.config/opencode
->   - /home/myuser/.local/share/opencode:/home/openchamber/.local/share/opencode
->   - /home/myuser/.local/state/opencode:/home/openchamber/.local/state/opencode
-> ```
+Coolify manages these volumes automatically and displays them in the
+**Storages** tab of the service.
 
 ---
 
 ## Building the image locally
 
 ```bash
-# Clone this repo
 git clone https://github.com/NathanJGaul/openchamber-coolify.git
 cd openchamber-coolify
 
-# Build (defaults to OpenChamber main branch)
+# Build (pulls latest OpenChamber main branch)
 docker build -t openchamber-coolify .
 
-# Run locally
+# Run with bundled opencode (no host binary needed)
+docker run -p 3000:3000 openchamber-coolify
+
+# Run with host opencode binary mounted
 docker run -p 3000:3000 \
   -v /usr/local/bin/opencode:/opt/host-opencode/opencode:ro \
   openchamber-coolify
 ```
 
-Then open `http://localhost:3000`.
+Open `http://localhost:3000`.
 
 ---
 
@@ -201,22 +284,27 @@ Pass `OPENCHAMBER_VERSION` as a build-arg to target a specific branch or tag:
 docker build --build-arg OPENCHAMBER_VERSION=v1.10.4 -t openchamber-coolify .
 ```
 
-To publish a pinned version via GitHub Actions, trigger the workflow manually
-with the `workflow_dispatch` event and override the build-arg, or push a tag
-that matches `v*`.
+To publish a pinned version via GitHub Actions, push a tag matching `v*`:
+
+```bash
+git tag v1.10.4
+git push origin v1.10.4
+```
+
+The workflow publishes `ghcr.io/nathanjgaul/openchamber-coolify:v1.10.4` alongside `latest`.
 
 ---
 
 ## How the image is published
 
-The [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)
-workflow runs on every push to `main` and on `v*` tags.  It:
+[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)
+runs on every push to `main` and on `v*` tags:
 
-1. Logs in to `ghcr.io` using `GITHUB_TOKEN` (no secrets to configure).
+1. Authenticates to `ghcr.io` using `GITHUB_TOKEN` — no secrets to configure.
 2. Tags the image as:
-   - `latest` (on `main`)
-   - The git tag (e.g. `v1.10.4`) when a version tag is pushed
-   - `sha-<short-sha>` for every run
+   - `latest` — on every `main` push
+   - The git tag (e.g. `v1.10.4`) — when a version tag is pushed
+   - `sha-<short-sha>` — on every run, for rollback pinning
 3. Pushes to `ghcr.io/nathanjgaul/openchamber-coolify`.
 
 Layer caching via GitHub Actions cache keeps subsequent builds fast.
@@ -227,17 +315,17 @@ Layer caching via GitHub Actions cache keeps subsequent builds fast.
 
 ```
 .
-├── Dockerfile                        # Multi-stage build (clone → deps → build → runtime)
-├── entrypoint.sh                     # Wrapper: prefer host opencode, then delegate to upstream entrypoint
-├── docker-compose.yml                # Coolify deployment configuration
+├── Dockerfile                        # Multi-stage: clone → deps → build → runtime
+├── entrypoint.sh                     # Wrapper: prefer host opencode, then upstream entrypoint
+├── docker-compose.yml                # Coolify deployment (SERVICE_FQDN, ${VAR} env syntax)
 └── .github/
     └── workflows/
-        └── docker-publish.yml        # Build and push to ghcr.io
+        └── docker-publish.yml        # Build and push to ghcr.io on main / v* tags
 ```
 
 ---
 
 ## License
 
-This repository contains only build and deployment tooling.  OpenChamber itself
+This repository contains only build and deployment tooling. OpenChamber itself
 is licensed under the [MIT License](https://github.com/openchamber/openchamber/blob/main/LICENSE).

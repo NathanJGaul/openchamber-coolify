@@ -9,7 +9,9 @@ set -eu
 # If the mount is absent, the bundled opencode-ai npm package is used instead
 # (it is already on PATH via NPM_CONFIG_PREFIX/bin).
 HOST_OPENCODE="/opt/host-opencode/opencode"
-if [ -x "${HOST_OPENCODE}" ]; then
+# Use [ -f ] to confirm it is a regular file, not an empty directory that Docker
+# may create when the source path is absent on the host at deploy time.
+if [ -f "${HOST_OPENCODE}" ] && [ -x "${HOST_OPENCODE}" ]; then
     echo "[entrypoint] using host-mounted opencode: ${HOST_OPENCODE}"
     # Prepend the directory so it shadows the bundled opencode-ai binary.
     HOST_BIN_DIR="$(dirname "${HOST_OPENCODE}")"
