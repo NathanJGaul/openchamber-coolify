@@ -14,11 +14,12 @@
 # HOST OPENCODE INTEGRATION
 # ─────────────────────────
 # Option A – mount the host binary (recommended):
-#   Uncomment the volume line under "Option A" below.
-#   Adjust the left side to the actual path of opencode on the Coolify host, e.g.:
-#     /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
-#     /home/myuser/.local/bin/opencode:/opt/host-opencode/opencode:ro
+#   Set HOST_OPENCODE_PATH to the absolute path of opencode on the Coolify host.
+#   The volume mount below uses that value automatically, e.g.:
+#     HOST_OPENCODE_PATH=/usr/local/bin/opencode
+#     HOST_OPENCODE_PATH=/home/myuser/.local/bin/opencode
 #   The entrypoint auto-detects the mount and prefers it over the bundled opencode-ai.
+#   Leave HOST_OPENCODE_PATH empty to skip the mount and use the bundled binary.
 #
 # Option B – connect to a running opencode server on the host:
 #   Set OPENCODE_HOST=http://host.docker.internal:4096 and OPENCODE_SKIP_START=true.
@@ -42,6 +43,11 @@ services:
       - OPENCHAMBER_HOST=0.0.0.0
       # Protect the web UI with a password. Leave empty to disable authentication.
       - UI_PASSWORD=${UI_PASSWORD:-}
+
+      # ── Host opencode – Option A ────────────────────────────────────────────
+      # Absolute path to the opencode binary on the Coolify host.
+      # Leave empty to skip the host mount and use the bundled opencode-ai instead.
+      - HOST_OPENCODE_PATH=${HOST_OPENCODE_PATH:-}
 
       # ── Host opencode – Option B ─────────────────────────────────────────────
       # URL of an opencode server already running on the host.
@@ -67,9 +73,10 @@ services:
       - opencode-state:/home/openchamber/.local/state/opencode
 
       # ── Host opencode binary – Option A ─────────────────────────────────────
-      # Uncomment and adjust the left side to the opencode binary path on your host.
-      # The source file MUST already exist on the host before deploying.
-      - /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
+      # Mounts ${HOST_OPENCODE_PATH} from the host into the container.
+      # Docker requires a non-empty source, so this line is ignored when
+      # HOST_OPENCODE_PATH is unset — set it to enable Option A.
+      - ${HOST_OPENCODE_PATH:-/dev/null}:/opt/host-opencode/opencode:ro
 
     restart: unless-stopped
 
