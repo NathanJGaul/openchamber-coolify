@@ -1,0 +1,51 @@
+# Coolify-compatible Docker Compose for OpenChamber
+# Image is published to ghcr.io/nathanjgaul/openchamber-coolify via GitHub Actions.
+#
+# HOST OPENCODE INTEGRATION
+# ─────────────────────────
+# Option A (recommended) – mount the host binary so the container runs it directly:
+#   Adjust the left side of the volume below to your actual opencode binary path.
+#   Common locations: /usr/local/bin/opencode  or  /home/<user>/.local/bin/opencode
+#
+# Option B – connect to an already-running opencode server on the host:
+#   Uncomment OPENCODE_HOST and OPENCODE_SKIP_START instead.
+
+services:
+  openchamber:
+    image: ghcr.io/nathanjgaul/openchamber-coolify:latest
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # ── Persistent OpenChamber data ─────────────────────────────────────────
+      - openchamber-config:/home/openchamber/.config/openchamber
+      - openchamber-ssh:/home/openchamber/.ssh
+      - openchamber-workspaces:/home/openchamber/workspaces
+      # ── OpenCode data (config, state, models cache) ─────────────────────────
+      - opencode-config:/home/openchamber/.config/opencode
+      - opencode-share:/home/openchamber/.local/share/opencode
+      - opencode-state:/home/openchamber/.local/state/opencode
+      # ── Host opencode binary (Option A) ─────────────────────────────────────
+      # Mount the host's opencode binary into the container.
+      # The entrypoint will automatically prefer it over the bundled opencode-ai.
+      # Change the left side to match the binary's actual path on your host.
+      - /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
+    environment:
+      OPENCHAMBER_HOST: "0.0.0.0"
+      # Uncomment to require a password for the web UI:
+      # UI_PASSWORD: "your_secure_password_here"
+      #
+      # Option B: connect to an opencode server already running on the host
+      # (remove the Option A volume mount above when using this):
+      # OPENCODE_HOST: "http://host.docker.internal:4096"
+      # OPENCODE_SKIP_START: "true"
+    restart: unless-stopped
+
+volumes:
+  openchamber-config:
+  openchamber-ssh:
+  openchamber-workspaces:
+  opencode-config:
+  opencode-share:
+  opencode-state:
