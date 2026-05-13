@@ -69,7 +69,7 @@ services:
       # ── Host opencode binary – Option A ─────────────────────────────────────
       # Uncomment and adjust the left side to the opencode binary path on your host.
       # The source file MUST already exist on the host before deploying.
-      # - /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
+      - /usr/local/bin/opencode:/opt/host-opencode/opencode:ro
 
     restart: unless-stopped
 
