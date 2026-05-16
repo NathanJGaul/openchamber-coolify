@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Replace the base image's 'bun' user (UID 1000) with 'openchamber'
 # so mounted volumes with 1000:1000 ownership work correctly.
 RUN userdel bun \
+    && groupdel bun \
     && groupadd -g 1000 openchamber \
     && useradd -u 1000 -g 1000 -m -s /bin/bash openchamber \
     && chown -R openchamber:openchamber /home/openchamber
