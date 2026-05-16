@@ -18,4 +18,21 @@ if [ -f "${HOST_OPENCODE}" ] && [ -x "${HOST_OPENCODE}" ]; then
     export PATH="${HOST_BIN_DIR}:${PATH}"
 fi
 
+# On first startup (no existing settings), initialize lastDirectory to the git
+# repository so the frontend does not poll for git info on the home directory
+# (which is not a git repo), avoiding repeated "not a git repository" errors.
+SETTINGS_DIR="/home/openchamber/.config/openchamber"
+SETTINGS_FILE="${SETTINGS_DIR}/settings.json"
+if [ ! -f "${SETTINGS_FILE}" ]; then
+    echo "[entrypoint] initializing settings with lastDirectory pointing to OpenChamber source"
+    mkdir -p "${SETTINGS_DIR}"
+    cat > "${SETTINGS_FILE}" <<'EOF'
+{
+  "lastDirectory": "/home/openchamber/openchamber",
+  "homeDirectory": "/home/openchamber",
+  "version": 1
+}
+EOF
+fi
+
 exec sh /home/openchamber/openchamber-entrypoint.sh "$@"
