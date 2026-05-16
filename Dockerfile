@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     openssh-client \
     python3 \
+    gh \
     && rm -rf /var/lib/apt/lists/*
 
 # Replace the base image's 'bun' user (UID 1000) with 'openchamber'

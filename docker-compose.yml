@@ -56,18 +56,24 @@ services:
       # Set to "true" when using OPENCODE_HOST so OpenChamber does not start its own process.
       - OPENCODE_SKIP_START=${OPENCODE_SKIP_START:-false}
 
+      # ── gh CLI Credentials ────────────────────────────────────────────────
+      - GH_TOKEN=${GH_TOKEN:?}
+
     extra_hosts:
       # Allows the container to reach the Docker host as "host.docker.internal"
       # (required for Option B).
       - "host.docker.internal:host-gateway"
 
     volumes:
+      # ── Persistent OpenChamber install───────────────────────────────────────
+      - openchamber-install:/home/openchamber/.npm-global
+
       # ── Persistent OpenChamber data ─────────────────────────────────────────
       - openchamber-config:/home/openchamber/.config/openchamber
       - openchamber-ssh:/home/openchamber/.ssh
       - openchamber-workspaces:/home/openchamber/workspaces
 
-      # ── OpenCode data (config, API keys, conversation history, model cache) ──
+      # ── OpenCode data (config, API keys, conversation history, model cache) ─
       - opencode-config:/home/openchamber/.config/opencode
       - opencode-share:/home/openchamber/.local/share/opencode
       - opencode-state:/home/openchamber/.local/state/opencode
@@ -88,6 +94,7 @@ services:
       start_period: 60s
 
 volumes:
+  openchamber-install:
   openchamber-config:
   openchamber-ssh:
   openchamber-workspaces:
