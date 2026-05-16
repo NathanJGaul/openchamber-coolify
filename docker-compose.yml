@@ -78,9 +78,6 @@ services:
       # HOST_OPENCODE_PATH is unset — set it to enable Option A.
       - ${HOST_OPENCODE_PATH:-/dev/null}:/opt/host-opencode/opencode:ro
 
-      # Mount projects directory
-      - ${HOST_PROJECTS_PATH:-/dev/null}:/home/openchamber/projects
-
     restart: unless-stopped
 
     healthcheck:
