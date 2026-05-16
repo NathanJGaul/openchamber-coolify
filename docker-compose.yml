@@ -65,13 +65,16 @@ services:
       - "host.docker.internal:host-gateway"
 
     volumes:
-      # ── Persistent OpenChamber install───────────────────────────────────────
+      # ── Persistent OpenCode install───────────────────────────────────────
       - openchamber-install:/home/openchamber/.npm-global
 
       # ── Persistent OpenChamber data ─────────────────────────────────────────
       - openchamber-config:/home/openchamber/.config/openchamber
       - openchamber-ssh:/home/openchamber/.ssh
       - openchamber-workspaces:/home/openchamber/workspaces
+
+      # ── OpenChamber source (for in-container git pull + rebuild) ─────────
+      - openchamber-source:/home/openchamber/openchamber
 
       # ── OpenCode data (config, API keys, conversation history, model cache) ─
       - opencode-config:/home/openchamber/.config/opencode
@@ -98,6 +101,7 @@ volumes:
   openchamber-config:
   openchamber-ssh:
   openchamber-workspaces:
+  openchamber-source:
   opencode-config:
   opencode-share:
   opencode-state:

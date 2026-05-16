@@ -60,21 +60,25 @@ RUN npm config set prefix /home/openchamber/.npm-global \
                 /home/openchamber/workspaces \
     && npm install -g opencode-ai
 
-# Copy upstream entrypoint and our wrapper
+# Copy upstream entrypoint to the path our wrapper expects
 COPY --chown=openchamber:openchamber --from=builder \
      /app/scripts/docker-entrypoint.sh /home/openchamber/openchamber-entrypoint.sh
+
+# Copy our entrypoint wrapper
 COPY --chown=openchamber:openchamber entrypoint.sh /home/openchamber/entrypoint.sh
 
-# Copy built application artifacts
-COPY --from=deps    /app/node_modules                     ./node_modules
-COPY --from=deps    /app/packages/web/node_modules        ./packages/web/node_modules
-COPY --from=builder /app/package.json                     ./package.json
-COPY --from=builder /app/packages/web/package.json        ./packages/web/package.json
-COPY --from=builder /app/packages/web/bin                 ./packages/web/bin
-COPY --from=builder /app/packages/web/server              ./packages/web/server
-COPY --from=builder /app/packages/web/dist                ./packages/web/dist
+# Copy full OpenChamber source tree (with .git history) into a subdirectory
+# that can be mounted on a named volume.  This allows git pull, bun install,
+# and bun run build:web to be run from inside the container and have the
+# results persist across restarts.
+COPY --chown=openchamber:openchamber --from=builder /app /home/openchamber/openchamber
+
+# Copy update scripts
+COPY --chown=openchamber:openchamber update-openchamber.sh /home/openchamber/update-openchamber.sh
+RUN chmod +x /home/openchamber/update-openchamber.sh
 
 ENV NODE_ENV=production
+WORKDIR /home/openchamber/openchamber
 EXPOSE 3000
 
 ENTRYPOINT ["sh", "/home/openchamber/entrypoint.sh"]
