@@ -56,6 +56,12 @@ services:
       # Set to "true" when using OPENCODE_HOST so OpenChamber does not start its own process.
       - OPENCODE_SKIP_START=${OPENCODE_SKIP_START:-false}
 
+      # ── SSH key for git ──────────────────────────────────────────────────
+      # On first startup, the container auto-generates an ed25519 key pair
+      # persisted in the openchamber-ssh volume. The public key is printed to
+      # the container logs — add it to your Git provider (GitHub/GitLab) as a
+      # deploy key or SSH key. The key is reused on subsequent restarts.
+
       # ── gh CLI Credentials ────────────────────────────────────────────────
       - GH_TOKEN=${GH_TOKEN:?}
 
