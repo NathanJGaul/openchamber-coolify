@@ -8,7 +8,8 @@
 # 3. After loading, assign a domain to the "openchamber" service in Coolify's UI.
 #    (SERVICE_FQDN_OPENCHAMBER_3000 tells Coolify's proxy to route traffic to port 3000.)
 # 4. Set UI_PASSWORD if you want to password-protect the web interface.
-# 5. Set OPENCHAMBER_VERSION to pin a specific release (e.g. v0.5.2) or branch (e.g. main).
+# 5. To pin a specific release, set OPENCHAMBER_VERSION in Coolify's UI (e.g. v0.5.2).
+#    The Dockerfile defaults to "main" when unset.
 # 6. Deploy.
 #
 # OPENCODE INTEGRATION
@@ -26,21 +27,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        OPENCHAMBER_VERSION: ${OPENCHAMBER_VERSION:-main}
-        OPENCODE_VERSION: ${OPENCODE_VERSION:-latest}
 
     environment:
       # ── Coolify magic variable ───────────────────────────────────────────────
       # Registers this service with Coolify's Traefik proxy on container port 3000.
       # Assign a domain to this service in Coolify's UI after loading the compose file.
       - SERVICE_FQDN_OPENCHAMBER_3000
-
-      # ── Build args passed through to runtime environment ─────────────────────
-      # These must be declared here so Coolify sees them as env vars rather than
-      # trying to inject them itself (which breaks YAML list parsing).
-      - OPENCHAMBER_VERSION=${OPENCHAMBER_VERSION:-main}
-      - OPENCODE_VERSION=${OPENCODE_VERSION:-latest}
 
       # ── OpenChamber settings ─────────────────────────────────────────────────
       # Bind to all interfaces inside Docker (required for proxy routing to work).
