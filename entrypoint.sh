@@ -88,4 +88,31 @@ if [ ! -f "${SETTINGS_FILE}" ]; then
 EOF
 fi
 
+# ── Version consistency check ──────────────────────────────────────────────
+# If the source was updated via git pull but the web was not rebuilt, the CLI
+# and web app versions will diverge. Rebuild automatically.
+OPENCHAMBER_SOURCE="/home/openchamber/openchamber"
+VERSION_MARKER="${OPENCHAMBER_SOURCE}/.source_version"
+
+if [ -f "${OPENCHAMBER_SOURCE}/packages/web/package.json" ]; then
+  SOURCE_VERSION=$(python3 -c "
+import json
+with open('${OPENCHAMBER_SOURCE}/packages/web/package.json') as f:
+    print(json.load(f).get('version', 'unknown'))
+" 2>/dev/null || echo "unknown")
+
+  STORED_VERSION=$(cat "${VERSION_MARKER}" 2>/dev/null || echo "")
+
+  if [ "${SOURCE_VERSION}" != "${STORED_VERSION}" ] && [ "${SOURCE_VERSION}" != "unknown" ] && [ -n "${SOURCE_VERSION}" ]; then
+    echo "[entrypoint] source version ${SOURCE_VERSION} differs from built version ${STORED_VERSION:-none}, rebuilding web UI..."
+    cd "${OPENCHAMBER_SOURCE}"
+    if bun install --frozen-lockfile --ignore-scripts && bun run build:web; then
+      echo "${SOURCE_VERSION}" > "${VERSION_MARKER}"
+      echo "[entrypoint] web UI rebuilt successfully to version ${SOURCE_VERSION}"
+    else
+      echo "[entrypoint] warning: web UI rebuild failed, using existing build" >&2
+    fi
+  fi
+fi
+
 exec sh /home/openchamber/openchamber-entrypoint.sh "$@"

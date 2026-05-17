@@ -73,6 +73,11 @@ COPY --chown=openchamber:openchamber entrypoint.sh /home/openchamber/entrypoint.
 # results persist across restarts.
 COPY --chown=openchamber:openchamber --from=builder /app /home/openchamber/openchamber
 
+# Record the source version at build time so the entrypoint can detect
+# if the source has been updated in-container without rebuilding the web.
+RUN python3 -c "import json; print(json.load(open('/home/openchamber/openchamber/packages/web/package.json'))['version'])" \
+    > /home/openchamber/openchamber/.source_version
+
 # Copy update scripts
 COPY --chown=openchamber:openchamber update-openchamber.sh /home/openchamber/update-openchamber.sh
 RUN chmod +x /home/openchamber/update-openchamber.sh
