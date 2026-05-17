@@ -8,25 +8,17 @@
 # 3. After loading, assign a domain to the "openchamber" service in Coolify's UI.
 #    (SERVICE_FQDN_OPENCHAMBER_3000 tells Coolify's proxy to route traffic to port 3000.)
 # 4. Set UI_PASSWORD if you want to password-protect the web interface.
-# 5. Choose your opencode integration method – see HOST OPENCODE section below.
-# 6. Deploy.
+# 5. Deploy.
 #
-# HOST OPENCODE INTEGRATION
-# ─────────────────────────
-# Option A – mount the host binary (recommended):
-#   Set HOST_OPENCODE_PATH to the absolute path of opencode on the Coolify host.
-#   The volume mount below uses that value automatically, e.g.:
-#     HOST_OPENCODE_PATH=/usr/local/bin/opencode
-#     HOST_OPENCODE_PATH=/home/myuser/.local/bin/opencode
-#   The entrypoint auto-detects the mount and prefers it over the bundled opencode-ai.
-#   Leave HOST_OPENCODE_PATH empty to skip the mount and use the bundled binary.
-#
-# Option B – connect to a running opencode server on the host:
+# OPENCODE INTEGRATION
+# ────────────────────
+# Option A – connect to a running opencode server on the host:
 #   Set OPENCODE_HOST=http://host.docker.internal:4096 and OPENCODE_SKIP_START=true.
 #   host.docker.internal is pre-configured via extra_hosts below.
 #
-# Fallback – neither option:
-#   The bundled opencode-ai npm package is used automatically.
+# Option B – bundled opencode-ai (default):
+#   The npm package installed at Docker build time is used automatically.
+#   The version is controlled by the OPENCODE_VERSION build arg (default: latest).
 
 services:
   openchamber:
@@ -44,14 +36,10 @@ services:
       # Protect the web UI with a password. Leave empty to disable authentication.
       - UI_PASSWORD=${UI_PASSWORD:-}
 
-      # ── Host opencode – Option A ────────────────────────────────────────────
-      # Absolute path to the opencode binary on the Coolify host.
-      # Leave empty to skip the host mount and use the bundled opencode-ai instead.
-      - HOST_OPENCODE_PATH=${HOST_OPENCODE_PATH:-}
-
-      # ── Host opencode – Option B ─────────────────────────────────────────────
+      # ── OpenCode server connection ──────────────────────────────────────────
       # URL of an opencode server already running on the host.
       # Example: http://host.docker.internal:4096
+      # Leave empty to use the bundled opencode-ai installed at build time.
       - OPENCODE_HOST=${OPENCODE_HOST:-}
       # Set to "true" when using OPENCODE_HOST so OpenChamber does not start its own process.
       - OPENCODE_SKIP_START=${OPENCODE_SKIP_START:-false}
@@ -71,27 +59,15 @@ services:
       - "host.docker.internal:host-gateway"
 
     volumes:
-      # ── Persistent OpenCode install───────────────────────────────────────
-      - openchamber-install:/home/openchamber/.npm-global
-
       # ── Persistent OpenChamber data ─────────────────────────────────────────
       - openchamber-config:/home/openchamber/.config/openchamber
       - openchamber-ssh:/home/openchamber/.ssh
       - openchamber-workspaces:/home/openchamber/workspaces
 
-      # ── OpenChamber source (for in-container git pull + rebuild) ─────────
-      - openchamber-source:/home/openchamber/openchamber
-
       # ── OpenCode data (config, API keys, conversation history, model cache) ─
       - opencode-config:/home/openchamber/.config/opencode
       - opencode-share:/home/openchamber/.local/share/opencode
       - opencode-state:/home/openchamber/.local/state/opencode
-
-      # ── Host opencode binary – Option A ─────────────────────────────────────
-      # Mounts ${HOST_OPENCODE_PATH} from the host into the container.
-      # Docker requires a non-empty source, so this line is ignored when
-      # HOST_OPENCODE_PATH is unset — set it to enable Option A.
-      - ${HOST_OPENCODE_PATH:-/dev/null}:/opt/host-opencode/opencode:ro
 
     restart: unless-stopped
 
@@ -103,11 +79,9 @@ services:
       start_period: 60s
 
 volumes:
-  openchamber-install:
   openchamber-config:
   openchamber-ssh:
   openchamber-workspaces:
-  openchamber-source:
   opencode-config:
   opencode-share:
   opencode-state:

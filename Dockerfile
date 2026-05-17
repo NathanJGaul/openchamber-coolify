@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 # Builds OpenChamber (https://github.com/openchamber/openchamber) for Coolify deployment.
-# Supports using the host's opencode binary via a volume mount at /opt/host-opencode/opencode.
+#   ARG OPENCHAMBER_VERSION – branch/tag of openchamber/openchamber to clone (default: main)
+#   ARG OPENCODE_VERSION    – npm version of opencode-ai to install (default: latest)
 
 # ── Stage 1: clone source ────────────────────────────────────────────────────
 FROM oven/bun:1 AS source
@@ -49,7 +50,9 @@ USER openchamber
 ENV NPM_CONFIG_PREFIX=/home/openchamber/.npm-global
 ENV PATH=${NPM_CONFIG_PREFIX}/bin:${PATH}
 
-# Install opencode-ai as the bundled fallback when no host binary is mounted.
+ARG OPENCODE_VERSION=latest
+
+# Install opencode-ai at the specified version (defaults to latest).
 RUN npm config set prefix /home/openchamber/.npm-global \
     && mkdir -p /home/openchamber/.npm-global \
     && mkdir -p /home/openchamber/.local/share/opencode \
@@ -58,7 +61,7 @@ RUN npm config set prefix /home/openchamber/.npm-global \
                 /home/openchamber/.config/opencode \
                 /home/openchamber/.ssh \
                 /home/openchamber/workspaces \
-    && npm install -g opencode-ai
+    && npm install -g "opencode-ai@${OPENCODE_VERSION}"
 
 # Copy upstream entrypoint to the path our wrapper expects
 COPY --chown=openchamber:openchamber --from=builder \
@@ -67,26 +70,12 @@ COPY --chown=openchamber:openchamber --from=builder \
 # Copy our entrypoint wrapper
 COPY --chown=openchamber:openchamber entrypoint.sh /home/openchamber/entrypoint.sh
 
-# Copy full OpenChamber source tree (with .git history) into a subdirectory
-# that can be mounted on a named volume.  This allows git pull, bun install,
-# and bun run build:web to be run from inside the container and have the
-# results persist across restarts.
+# Copy the built OpenChamber source tree into the image.
 COPY --chown=openchamber:openchamber --from=builder /app /home/openchamber/openchamber
 
-# Record the source version at build time so the entrypoint can detect
-# if the source has been updated in-container without rebuilding the web.
+# Record the baked-in version for runtime reference.
 RUN python3 -c "import json; print(json.load(open('/home/openchamber/openchamber/packages/web/package.json'))['version'])" \
-    > /home/openchamber/openchamber/.source_version
-
-# Record the image version OUTSIDE the source volume so the entrypoint can
-# detect when the Docker image has been rebuilt (newer code) but the
-# openchamber-source volume still has stale source from a previous deploy.
-RUN python3 -c "import json; print(json.load(open('/home/openchamber/openchamber/packages/web/package.json'))['version'])" \
-    > /home/openchamber/.image_version
-
-# Copy update scripts
-COPY --chown=openchamber:openchamber update-openchamber.sh /home/openchamber/update-openchamber.sh
-RUN chmod +x /home/openchamber/update-openchamber.sh
+    > /home/openchamber/.openchamber_version
 
 ENV NODE_ENV=production
 WORKDIR /home/openchamber/openchamber
