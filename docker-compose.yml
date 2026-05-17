@@ -1,5 +1,5 @@
 # Coolify-compatible Docker Compose for OpenChamber
-# Builds from the local Dockerfile for full control over the openchamber version.
+# Pulls the pre-built image from GitHub Container Registry.
 #
 # HOW TO DEPLOY IN COOLIFY
 # ────────────────────────
@@ -8,9 +8,7 @@
 # 3. After loading, assign a domain to the "openchamber" service in Coolify's UI.
 #    (SERVICE_FQDN_OPENCHAMBER_3000 tells Coolify's proxy to route traffic to port 3000.)
 # 4. Set UI_PASSWORD if you want to password-protect the web interface.
-# 5. To pin a specific release, set OPENCHAMBER_VERSION in Coolify's UI (e.g. v0.5.2).
-#    The Dockerfile defaults to "main" when unset.
-# 6. Deploy.
+# 5. Deploy.
 #
 # OPENCODE INTEGRATION
 # ────────────────────
@@ -19,14 +17,11 @@
 #   host.docker.internal is pre-configured via extra_hosts below.
 #
 # Option B – bundled opencode-ai (default):
-#   The npm package installed at Docker build time is used automatically.
-#   The version is controlled by the OPENCODE_VERSION build arg (default: latest).
+#   The npm package is included in the pre-built image.
 
 services:
   openchamber:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nathanjgaul/openchamber-coolify:latest
 
     environment:
       # ── Coolify magic variable ───────────────────────────────────────────────
