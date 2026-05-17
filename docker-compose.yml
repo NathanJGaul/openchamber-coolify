@@ -36,6 +36,12 @@ services:
       # Assign a domain to this service in Coolify's UI after loading the compose file.
       - SERVICE_FQDN_OPENCHAMBER_3000
 
+      # ── Build args passed through to runtime environment ─────────────────────
+      # These must be declared here so Coolify sees them as env vars rather than
+      # trying to inject them itself (which breaks YAML list parsing).
+      - OPENCHAMBER_VERSION=${OPENCHAMBER_VERSION:-main}
+      - OPENCODE_VERSION=${OPENCODE_VERSION:-latest}
+
       # ── OpenChamber settings ─────────────────────────────────────────────────
       # Bind to all interfaces inside Docker (required for proxy routing to work).
       - OPENCHAMBER_HOST=0.0.0.0
