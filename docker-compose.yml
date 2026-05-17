@@ -21,7 +21,7 @@
 
 services:
   openchamber:
-    image: ghcr.io/nathanjgaul/openchamber-coolify:v1.11.2
+    image: ghcr.io/nathanjgaul/openchamber-coolify:${OPENCHAMBER_VERSION:-v1.11.2}
 
     environment:
       # ── Coolify magic variable ───────────────────────────────────────────────
