@@ -18,6 +18,14 @@ if [ -f "${HOST_OPENCODE}" ] && [ -x "${HOST_OPENCODE}" ]; then
     export PATH="${HOST_BIN_DIR}:${PATH}"
 fi
 
+# Initialize a minimal git repo in the home directory so simple-git (used by
+# OpenChamber for git status/branch info) does not throw repeated
+# "not a git repository" errors when the frontend polls the current directory.
+if [ ! -d "/home/openchamber/.git" ]; then
+    echo "[entrypoint] initializing git repo in home directory"
+    cd /home/openchamber && git init --quiet
+fi
+
 # On first startup (no existing settings), initialize lastDirectory to the git
 # repository so the frontend does not poll for git info on the home directory
 # (which is not a git repo), avoiding repeated "not a git repository" errors.
