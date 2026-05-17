@@ -88,11 +88,13 @@ if [ ! -f "${SETTINGS_FILE}" ]; then
 EOF
 fi
 
-# ── Version consistency check ──────────────────────────────────────────────
-# If the source was updated via git pull but the web was not rebuilt, the CLI
-# and web app versions will diverge. Rebuild automatically.
+# ── Version consistency checks ──────────────────────────────────────────────
+# The openchamber-source Docker volume persists /home/openchamber/openchamber
+# across container recreations, which means a new image's source code is
+# shadowed by the volume.  These checks detect and correct version drift.
 OPENCHAMBER_SOURCE="/home/openchamber/openchamber"
-VERSION_MARKER="${OPENCHAMBER_SOURCE}/.source_version"
+SOURCE_VERSION_MARKER="${OPENCHAMBER_SOURCE}/.source_version"
+IMAGE_VERSION_FILE="/home/openchamber/.image_version"
 
 if [ -f "${OPENCHAMBER_SOURCE}/packages/web/package.json" ]; then
   SOURCE_VERSION=$(python3 -c "
@@ -101,16 +103,51 @@ with open('${OPENCHAMBER_SOURCE}/packages/web/package.json') as f:
     print(json.load(f).get('version', 'unknown'))
 " 2>/dev/null || echo "unknown")
 
-  STORED_VERSION=$(cat "${VERSION_MARKER}" 2>/dev/null || echo "")
+  STORED_SOURCE_VERSION=$(cat "${SOURCE_VERSION_MARKER}" 2>/dev/null || echo "")
 
-  if [ "${SOURCE_VERSION}" != "${STORED_VERSION}" ] && [ "${SOURCE_VERSION}" != "unknown" ] && [ -n "${SOURCE_VERSION}" ]; then
-    echo "[entrypoint] source version ${SOURCE_VERSION} differs from built version ${STORED_VERSION:-none}, rebuilding web UI..."
-    cd "${OPENCHAMBER_SOURCE}"
-    if bun install --frozen-lockfile --ignore-scripts && bun run build:web; then
-      echo "${SOURCE_VERSION}" > "${VERSION_MARKER}"
-      echo "[entrypoint] web UI rebuilt successfully to version ${SOURCE_VERSION}"
-    else
-      echo "[entrypoint] warning: web UI rebuild failed, using existing build" >&2
+  # Check 1: image version differs from volume's stored source version.
+  # This detects when the Docker image was rebuilt with newer code but the
+  # openchamber-source volume still has source from a prior deploy.
+  DID_REBUILD=false
+  if [ -f "${IMAGE_VERSION_FILE}" ]; then
+    IMAGE_VERSION=$(cat "${IMAGE_VERSION_FILE}" 2>/dev/null || echo "")
+    if [ -n "${IMAGE_VERSION}" ] && [ "${IMAGE_VERSION}" != "${STORED_SOURCE_VERSION}" ]; then
+      echo "[entrypoint] image version ${IMAGE_VERSION} differs from volume version ${STORED_SOURCE_VERSION:-none}."
+      echo "[entrypoint] updating source volume to match the deployed image..."
+      cd "${OPENCHAMBER_SOURCE}"
+      if git fetch --depth=1 origin main 2>/dev/null && git reset --hard origin/main 2>/dev/null; then
+        echo "[entrypoint] source updated, reinstalling dependencies and rebuilding web..."
+        if bun install --frozen-lockfile --ignore-scripts && bun run build:web; then
+          NEW_VERSION=$(python3 -c "
+import json
+print(json.load(open('${OPENCHAMBER_SOURCE}/packages/web/package.json'))['version'])
+" 2>/dev/null || echo "unknown")
+          echo "${NEW_VERSION}" > "${SOURCE_VERSION_MARKER}"
+          echo "[entrypoint] source volume updated and rebuilt to version ${NEW_VERSION}"
+          DID_REBUILD=true
+        else
+          echo "[entrypoint] warning: rebuild failed after source update" >&2
+        fi
+      else
+        echo "[entrypoint] warning: could not update source volume (git pull failed)" >&2
+      fi
+    fi
+  fi
+
+  # Check 2: source and built web in the volume are out of sync.
+  # This handles git pull inside the container that wasn't followed by a rebuild.
+  # Skipped if Check 1 already rebuilt above.
+  if [ "${DID_REBUILD}" = "false" ]; then
+    STORED_SOURCE_VERSION=$(cat "${SOURCE_VERSION_MARKER}" 2>/dev/null || echo "")
+    if [ "${SOURCE_VERSION}" != "${STORED_SOURCE_VERSION}" ] && [ "${SOURCE_VERSION}" != "unknown" ] && [ -n "${SOURCE_VERSION}" ]; then
+      echo "[entrypoint] source version ${SOURCE_VERSION} differs from built version ${STORED_SOURCE_VERSION:-none}, rebuilding web UI..."
+      cd "${OPENCHAMBER_SOURCE}"
+      if bun install --frozen-lockfile --ignore-scripts && bun run build:web; then
+        echo "${SOURCE_VERSION}" > "${SOURCE_VERSION_MARKER}"
+        echo "[entrypoint] web UI rebuilt successfully to version ${SOURCE_VERSION}"
+      else
+        echo "[entrypoint] warning: web UI rebuild failed, using existing build" >&2
+      fi
     fi
   fi
 fi

@@ -78,6 +78,12 @@ COPY --chown=openchamber:openchamber --from=builder /app /home/openchamber/openc
 RUN python3 -c "import json; print(json.load(open('/home/openchamber/openchamber/packages/web/package.json'))['version'])" \
     > /home/openchamber/openchamber/.source_version
 
+# Record the image version OUTSIDE the source volume so the entrypoint can
+# detect when the Docker image has been rebuilt (newer code) but the
+# openchamber-source volume still has stale source from a previous deploy.
+RUN python3 -c "import json; print(json.load(open('/home/openchamber/openchamber/packages/web/package.json'))['version'])" \
+    > /home/openchamber/.image_version
+
 # Copy update scripts
 COPY --chown=openchamber:openchamber update-openchamber.sh /home/openchamber/update-openchamber.sh
 RUN chmod +x /home/openchamber/update-openchamber.sh
