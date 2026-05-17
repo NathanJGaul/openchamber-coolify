@@ -6,11 +6,28 @@
 # ── Stage 1: clone source ────────────────────────────────────────────────────
 FROM oven/bun:1 AS source
 WORKDIR /app
-ARG OPENCHAMBER_VERSION=main
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+# Set to a release tag (e.g. v0.5.2) to download a release tarball,
+# or any branch name (e.g. main, dev) to git clone.
+ARG OPENCHAMBER_VERSION=1.11.2
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
-    && git clone --depth 1 --branch "${OPENCHAMBER_VERSION}" \
-         https://github.com/openchamber/openchamber.git .
+    && case "${OPENCHAMBER_VERSION}" in \
+        v[0-9]*.[0-9]*.[0-9]*) \
+            echo "Downloading release ${OPENCHAMBER_VERSION}..."; \
+            curl -sL "https://github.com/openchamber/openchamber/archive/refs/tags/${OPENCHAMBER_VERSION}.tar.gz" \
+                | tar xz --strip-components=1 \
+            ;; \
+        [0-9]*.[0-9]*.[0-9]*) \
+            echo "Downloading release v${OPENCHAMBER_VERSION}..."; \
+            curl -sL "https://github.com/openchamber/openchamber/archive/refs/tags/v${OPENCHAMBER_VERSION}.tar.gz" \
+                | tar xz --strip-components=1 \
+            ;; \
+        *) \
+            echo "Cloning branch/tag ${OPENCHAMBER_VERSION}..."; \
+            git clone --depth 1 --branch "${OPENCHAMBER_VERSION}" \
+                https://github.com/openchamber/openchamber.git . \
+            ;; \
+    esac
 
 # ── Stage 2: install dependencies ────────────────────────────────────────────
 FROM source AS deps

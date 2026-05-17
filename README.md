@@ -34,11 +34,24 @@ that variable in `docker-compose.yml` before deploying.
 docker build --no-cache -t openchamber-coolify-test .
 ```
 
-Optional build arg:
+The `OPENCHAMBER_VERSION` build arg accepts either a **release tag** (downloads a tarball from GitHub releases) or a **branch name** (git clones):
+
+| Example | Behavior |
+|---------|----------|
+| `main` (default) | git clone the `main` branch |
+| `v0.5.2` | Download release v0.5.2 tarball |
+| `0.5.2` | Same as above (auto-prepends `v`) |
+| `dev` | git clone the `dev` branch |
 
 ```bash
+# Build from a specific release (immutable, cache-friendly)
+docker build --no-cache --build-arg OPENCHAMBER_VERSION=v0.5.2 -t openchamber-coolify-test .
+
+# Build from a branch
 docker build --no-cache --build-arg OPENCHAMBER_VERSION=main -t openchamber-coolify-test .
 ```
+
+Releases are downloaded as tarballs (no git history), so the layer is immutable and Docker cache never becomes stale. Branches are still git cloned for flexibility.
 
 ## Notes
 
