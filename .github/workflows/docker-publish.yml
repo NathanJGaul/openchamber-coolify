@@ -7,6 +7,15 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      openchamber_version:
+        description: "OpenChamber version (tag or branch)"
+        required: false
+        default: "main"
+      opencode_version:
+        description: "opencode-ai npm version"
+        required: false
+        default: "latest"
 
 env:
   REGISTRY: ghcr.io
@@ -53,7 +62,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
           build-args: |
-            OPENCHAMBER_VERSION=main
-            OPENCODE_VERSION=latest
+            OPENCHAMBER_VERSION=${{ inputs.openchamber_version || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || 'main' }}
+            OPENCODE_VERSION=${{ inputs.opencode_version || 'latest' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
