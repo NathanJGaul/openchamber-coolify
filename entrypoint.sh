@@ -29,7 +29,7 @@ if [ ! -f "${SSH_KEY}" ]; then
     mkdir -p "${SSH_DIR}"
     ssh-keygen -t ed25519 -f "${SSH_KEY}" -N "" -q
     chmod 600 "${SSH_KEY}"
-    chmod 644 "${SSH_PUB}"
+    chmod 600 "${SSH_PUB}"
 fi
 
 chmod 700 "${SSH_DIR}"
