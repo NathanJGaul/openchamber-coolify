@@ -51,7 +51,7 @@ echo "========================================================================"
 # "not a git repository" errors when the frontend polls the current directory.
 if [ ! -d "/home/openchamber/.git" ]; then
     echo "[entrypoint] initializing git repo in home directory"
-    cd /home/openchamber && git init --quiet
+    (cd /home/openchamber && git init --quiet)
 fi
 
 # On first startup (no existing settings), initialize lastDirectory to the git
@@ -69,6 +69,25 @@ if [ ! -f "${SETTINGS_FILE}" ]; then
   "version": 1
 }
 EOF
+fi
+
+# ── Terminal setup ──────────────────────────────────────────────────────────
+# Explicitly set the shell the in-app terminal will spawn.
+export OPENCHAMBER_TERMINAL_SHELL="${OPENCHAMBER_TERMINAL_SHELL:-/bin/bash}"
+
+# Verify the shell is present and executable.
+if [ -x "${OPENCHAMBER_TERMINAL_SHELL}" ]; then
+    echo "[entrypoint] terminal shell: ${OPENCHAMBER_TERMINAL_SHELL}"
+else
+    echo "[entrypoint] WARNING: ${OPENCHAMBER_TERMINAL_SHELL} not found; terminal may fail"
+fi
+
+# Log the node-pty / bun-pty availability for debugging.
+if [ -f "/home/openchamber/openchamber/node_modules/bun-pty/src/index.ts" ]; then
+    echo "[entrypoint] bun-pty is installed"
+fi
+if [ -f "/home/openchamber/openchamber/node_modules/node-pty/lib/index.js" ]; then
+    echo "[entrypoint] node-pty is installed"
 fi
 
 exec sh /home/openchamber/openchamber-entrypoint.sh "$@"

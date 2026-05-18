@@ -34,6 +34,9 @@ services:
       - OPENCHAMBER_HOST=0.0.0.0
       # Protect the web UI with a password. Leave empty to disable authentication.
       - UI_PASSWORD=${UI_PASSWORD:-}
+      # Shell used by the in-app terminal. Defaults to /bin/bash (set in entrypoint).
+      # You can override this here if you need a different shell (e.g. /bin/zsh).
+      - OPENCHAMBER_TERMINAL_SHELL=${OPENCHAMBER_TERMINAL_SHELL:-/bin/bash}
 
       # ── OpenCode server connection ──────────────────────────────────────────
       # URL of an opencode server already running on the host.

@@ -31,7 +31,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 
 # ── Stage 2: install dependencies ────────────────────────────────────────────
 FROM source AS deps
-RUN bun install --frozen-lockfile --ignore-scripts
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 make gcc g++ nodejs npm \
+    && rm -rf /var/lib/apt/lists/* \
+    && bun install --frozen-lockfile --ignore-scripts \
+    && (npm rebuild node-pty || echo "[build] node-pty rebuild skipped (prebuilt unavailable)") \
+    && (npm rebuild bun-pty 2>/dev/null || echo "[build] bun-pty rebuild skipped (Rust not available)")
 
 # ── Stage 3: build web package ───────────────────────────────────────────────
 FROM deps AS builder
