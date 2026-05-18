@@ -57,6 +57,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     python3 \
     gh \
+    # Chromium system dependencies (required by Playwright headless browser)
+    libnss3 \
+    libnspr4 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Replace the base image's 'bun' user (UID 1000) with 'openchamber'
@@ -84,6 +98,20 @@ RUN npm config set prefix /home/openchamber/.npm-global \
                 /home/openchamber/.ssh \
                 /home/openchamber/workspaces \
     && npm install -g "opencode-ai@${OPENCODE_VERSION}"
+
+# Install Playwright + Chromium for headless browser automation (used by OpenCode).
+# The browser binary is baked into the image (~120 MB) so it's always available.
+RUN mkdir -p /home/openchamber/.cache/ms-playwright \
+    && npm install -g playwright \
+    && playwright install chromium \
+    && CHROMIUM_PATH=$(find /home/openchamber/.cache/ms-playwright -name "chrome" -type f 2>/dev/null | head -1) \
+    && if [ -n "${CHROMIUM_PATH}" ]; then \
+         echo "[build] Chromium installed at ${CHROMIUM_PATH}"; \
+       else \
+         echo "[build] WARNING: Chromium binary not found after playwright install"; \
+       fi
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/openchamber/.cache/ms-playwright
 
 # Copy upstream entrypoint to the path our wrapper expects
 COPY --chown=openchamber:openchamber --from=builder \

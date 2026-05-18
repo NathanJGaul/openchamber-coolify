@@ -90,4 +90,16 @@ if [ -f "/home/openchamber/openchamber/node_modules/node-pty/lib/index.js" ]; th
     echo "[entrypoint] node-pty is installed"
 fi
 
+# ── Playwright / Chromium ──────────────────────────────────────────────────
+if command -v playwright >/dev/null 2>&1; then
+    echo "[entrypoint] Playwright is available ($(playwright --version 2>/dev/null))"
+fi
+CHROMIUM_CACHE="${PLAYWRIGHT_BROWSERS_PATH:-/home/openchamber/.cache/ms-playwright}"
+CHROMIUM_BIN=$(find "${CHROMIUM_CACHE}" -name "chrome" -type f 2>/dev/null | head -1)
+if [ -n "${CHROMIUM_BIN}" ]; then
+    echo "[entrypoint] Chromium binary: ${CHROMIUM_BIN}"
+else
+    echo "[entrypoint] WARNING: Chromium binary not found under ${CHROMIUM_CACHE}"
+fi
+
 exec sh /home/openchamber/openchamber-entrypoint.sh "$@"
